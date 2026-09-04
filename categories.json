@@ -1,0 +1,253 @@
+{
+  "Security": [
+    "Suspicious sign-in or login attempt on your account",
+    "Someone signed into your account from a new device",
+    "Your password was changed or reset",
+    "Two-factor authentication code and verification",
+    "Unauthorized access to your account detected",
+    "Security breach or data compromise affecting your credentials",
+    "Account recovery request and identity verification",
+    "Phishing attempt or malware detected in your account",
+    "New device or location sign-in alert"
+  ],
+
+  "Finance/UPI": [
+    "UPI payment sent or received confirmation",
+    "UPI transaction alert and notification",
+    "Google Pay, PhonePe, Paytm UPI payment",
+    "Money transfer via unified payments interface",
+    "UPI payment request or pending transaction",
+    "Digital wallet UPI transaction receipt"
+  ],
+
+  "Finance/Credit Cards": [
+    "Credit card statement is ready for review",
+    "Credit card payment received or processed",
+    "Credit card transaction alert and notification",
+    "Credit card bill due date reminder",
+    "Credit card reward points and cashback summary",
+    "Credit card limit change or upgrade notice",
+    "Monthly credit card spending summary",
+    "Make the most of your credit card benefits"
+  ],
+
+  "Finance/Investments": [
+    "Investment portfolio update and performance report",
+    "Mutual fund and SIP investment transaction",
+    "Stock market trade confirmation and alert",
+    "Investment account statement and summary",
+    "Dividend received or capital gains notification",
+    "Fixed deposit or savings investment maturity",
+    "Investment advisory and market analysis report"
+  ],
+
+  "Finance/Banks": [
+    "Bank account transaction alert and notification",
+    "Bank account statement and balance summary",
+    "Bank fixed deposit or savings account update",
+    "Banking service update or policy change",
+    "Bank loan EMI payment reminder or confirmation",
+    "Bank KYC verification and document update",
+    "Salary credited or direct deposit notification"
+  ],
+
+  "Finance/Bills": [
+    "Electricity, water, or gas utility bill",
+    "Mobile phone or internet service bill",
+    "Bill payment reminder and due date alert",
+    "Subscription renewal and billing notification",
+    "Insurance premium payment reminder",
+    "Monthly service charge or fee notification"
+  ],
+
+  "Jobs/Job Alerts": [
+    "Job vacancies and employment opportunities",
+    "Companies hiring for open positions",
+    "Job alerts and career opportunity notifications",
+    "Software engineering job openings and roles",
+    "Developer job opportunities and listings",
+    "Apply now for new positions in your field",
+    "Job matching your profile and skills",
+    "Hiring for senior, lead, or manager roles"
+  ],
+
+  "Jobs/Interviews": [
+    "Interview scheduled or confirmation",
+    "Interview preparation and assessment details",
+    "Technical interview or coding challenge invitation",
+    "Interview feedback and next steps",
+    "Online assessment or take-home assignment",
+    "Interview calendar invite and logistics"
+  ],
+
+  "Jobs/Recruiters": [
+    "Recruiter reaching out about a specific role",
+    "Talent acquisition specialist contacting you",
+    "Headhunter message about career opportunity",
+    "Recruiter wants to discuss your background for a position",
+    "Staffing agency with relevant job opportunity",
+    "Recruiter forwarding your resume to hiring manager"
+  ],
+
+  "Development/GitHub": [
+    "GitHub pull request opened, merged, or closed",
+    "GitHub issue created, commented, or assigned",
+    "GitHub repository notification and activity",
+    "GitHub Actions CI/CD build or workflow result",
+    "GitHub Dependabot security or dependency alert",
+    "GitHub code review request or approval",
+    "GitHub release or tag notification"
+  ],
+
+  "Development/Server Alerts": [
+    "Server monitoring alert and incident notification",
+    "Server downtime, outage, or error report",
+    "Cloud infrastructure health check and status",
+    "Deployment status and release notification",
+    "Server CPU, memory, or disk usage alert",
+    "Application error and crash report notification",
+    "Database performance and connection alert"
+  ],
+
+  "Development/Programming": [
+    "Programming language release and changelog",
+    "Software development documentation update",
+    "Developer tools, APIs, and SDK announcements",
+    "Technical blog post about software engineering",
+    "API documentation, pricing, or usage update",
+    "Framework, library, or package release notes",
+    "Developer community and technical discussion",
+    "Domain name registration, renewal, or expiry notice",
+    "Your domain is expiring soon please renew",
+    "Last chance to renew your domain name before it expires",
+    "Web hosting and domain management notification"
+  ],
+
+  "Learning/Courses": [
+    "Online courses and educational programs enrollment",
+    "Training programs and professional certifications",
+    "Learn new technical or professional skills online",
+    "Educational workshops, bootcamps, and classes",
+    "Master in-demand skills and competencies",
+    "Course completion, certificate, and progress update",
+    "E-learning platform course recommendation"
+  ],
+
+  "Learning/Events": [
+    "Technology conference and summit invitation",
+    "Webinar, meetup, or live event registration",
+    "Tech event with industry speakers and panels",
+    "Developer conference or community gathering",
+    "Live session, workshop, or hackathon event",
+    "See industry leaders and experts speak live",
+    "Conference agenda, schedule, and session details"
+  ],
+
+  "Learning/AI-Tech": [
+    "Artificial intelligence news and breakthroughs",
+    "Machine learning research and trends",
+    "AI industry developments and analysis",
+    "Why AI and automation are transforming industries",
+    "Generative AI, LLM, and deep learning trends",
+    "AI ethics, policy, and societal impact discussion",
+    "New AI research paper or study explained"
+  ],
+
+  "Shopping/Amazon": [
+    "Amazon order confirmation and shipping update",
+    "Amazon delivery status and tracking notification",
+    "Amazon purchase receipt and invoice",
+    "Amazon deal, sale, or product recommendation",
+    "Amazon return, refund, or exchange update",
+    "Amazon Prime membership and benefits notification"
+  ],
+
+  "Shopping/Flipkart": [
+    "Flipkart order confirmation and shipping update",
+    "Flipkart delivery status and tracking notification",
+    "Flipkart purchase receipt and invoice",
+    "Flipkart sale, deal, or product recommendation",
+    "Flipkart return, refund, or exchange update",
+    "Flipkart Plus membership and reward notification"
+  ],
+
+  "Shopping/Other": [
+    "Online shopping order and delivery notification",
+    "E-commerce purchase confirmation and receipt",
+    "Product shipping and tracking update",
+    "Retail store purchase and transaction receipt",
+    "Shopping return, refund, or exchange notification",
+    "Marketplace order from Myntra, Swiggy, Zomato, etc."
+  ],
+
+  "Travel": [
+    "Flight booking confirmation and itinerary",
+    "Hotel reservation and check-in details",
+    "Train or bus ticket booking confirmation",
+    "Travel itinerary and trip planning information",
+    "IRCTC railway ticket and PNR status",
+    "Airline boarding pass and travel documents",
+    "Cab or ride booking confirmation"
+  ],
+
+  "Social": [
+    "Personal message or social communication",
+    "Social media notification from friends or contacts",
+    "Personal invitation to connect or chat",
+    "Community group or forum discussion update",
+    "Birthday, anniversary, or personal greeting",
+    "Social network activity and engagement notification"
+  ],
+
+  "Newsletters": [
+    "Newsletter subscription and regular digest",
+    "Weekly or monthly curated content roundup",
+    "Industry news digest and summary email",
+    "Blog newsletter and content update",
+    "Subscriber-only content and editorial newsletter",
+    "RSS digest or content aggregation email"
+  ],
+
+  "Promotions": [
+    "Marketing promotion and discount offer",
+    "Limited time sale and special deal",
+    "Promotional campaign and advertising email",
+    "Coupon, voucher, and cashback offer",
+    "Brand promotion and product launch announcement",
+    "Seasonal sale, clearance, and flash deal",
+    "Referral bonus and promotional reward"
+  ],
+
+  "Work": [
+    "Professional workplace communication and updates",
+    "Internal company announcement and memo",
+    "Team communication and project discussion",
+    "Workplace policy and organizational update",
+    "Meeting notes and action items summary"
+  ],
+
+  "Work/Reports": [
+    "Business report, analytics, and dashboard summary",
+    "Weekly or monthly status and progress report",
+    "Data analysis and performance metrics report",
+    "Project status update and milestone report",
+    "KPI tracking and business intelligence summary"
+  ],
+
+  "Work/HR": [
+    "Human resources policy and update notification",
+    "Employee benefits and payroll information",
+    "Leave approval, attendance, and time-off request",
+    "HR compliance, training, and onboarding update",
+    "Performance review and appraisal notification",
+    "Company holiday calendar and HR announcement"
+  ],
+
+  "Review": [
+    "Unclassifiable or ambiguous email content",
+    "Email requiring manual review and categorization",
+    "Insufficient context for automatic classification",
+    "Mixed content spanning multiple categories",
+    "Generic notification with unclear purpose"
+  ]
+}
