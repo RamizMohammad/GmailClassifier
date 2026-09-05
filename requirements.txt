@@ -5,3 +5,4 @@ fastapi>=0.115,<1
 uvicorn[standard]>=0.30,<1
 pydantic>=2.9,<3
 numpy>=1.26,<3
+qdrant-client>=1.8,<2

@@ -1,5 +1,5 @@
 """
-Configuration module for Gmail Smart Sorter V7.
+Configuration module for Gmail Smart Sorter V7.1.
 
 All settings are loaded from environment variables with sensible defaults.
 """
@@ -9,13 +9,14 @@ from typing import Optional
 
 
 # --- Version ---
-VERSION: str = "v7"
+VERSION: str = "v7.1"
+SCHEMA_VERSION: str = "v7.1"
 
 # --- Authentication ---
 CLASSIFIER_API_KEY: Optional[str] = os.environ.get("CLASSIFIER_API_KEY")
 
 # --- Model ---
-MODEL_NAME: str = os.environ.get("MODEL_NAME", "sentence-transformers/all-MiniLM-L6-v2")
+MODEL_NAME: str = os.environ.get("MODEL_NAME", "BAAI/bge-m3")
 
 # --- Limits ---
 MAX_BATCH_SIZE: int = int(os.environ.get("MAX_BATCH_SIZE", "100"))
@@ -26,10 +27,14 @@ MAX_REQUEST_SIZE: int = int(os.environ.get("MAX_REQUEST_SIZE", str(10 * 1024 * 1
 PROTOTYPES_FILE: str = os.environ.get("PROTOTYPES_FILE", "data/prototypes.json")
 BENCHMARK_FILE: str = os.environ.get("BENCHMARK_FILE", "data/benchmark.json")
 
+# --- Qdrant Settings ---
+QDRANT_PATH: str = os.environ.get("QDRANT_PATH", "qdrant_data")
+QDRANT_COLLECTION_NAME: str = os.environ.get("QDRANT_COLLECTION_NAME", "embeddings_v7_1")
+
 # --- Signal Weights (subject-first) ---
-WEIGHT_SUBJECT: float = float(os.environ.get("WEIGHT_SUBJECT", "0.50"))
-WEIGHT_FULLTEXT: float = float(os.environ.get("WEIGHT_FULLTEXT", "0.40"))
-WEIGHT_SENDER: float = float(os.environ.get("WEIGHT_SENDER", "0.10"))
+WEIGHT_SUBJECT: float = float(os.environ.get("WEIGHT_SUBJECT", "0.65"))
+WEIGHT_BODY: float = float(os.environ.get("WEIGHT_BODY", "0.35"))
+WEIGHT_SENDER: float = float(os.environ.get("WEIGHT_SENDER", "0.0")) # Weak signal, typically not used for direct semantic embedding
 
 # --- Prototype Scoring ---
 PROTO_TOP1_WEIGHT: float = float(os.environ.get("PROTO_TOP1_WEIGHT", "0.70"))
@@ -52,5 +57,5 @@ PORT: int = int(os.environ.get("PORT", "8000"))
 TOP_K: int = int(os.environ.get("TOP_K", "3"))
 
 # --- Dynamic Memory Management ---
-IDLE_TIMEOUT_SECONDS: int = int(os.environ.get("IDLE_TIMEOUT_SECONDS", "60"))
+IDLE_TIMEOUT_SECONDS: int = int(os.environ.get("IDLE_TIMEOUT_SECONDS", "600")) # Increased to 10 mins since load time is longer
 ENABLE_KEEP_ALIVE: bool = os.environ.get("ENABLE_KEEP_ALIVE", "true").lower() == "true"

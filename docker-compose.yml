@@ -1,37 +1,39 @@
 version: '3.8'
 
 services:
-  gmail-sorter:
+  gmail-classifier:
     build: .
-    container_name: gmail-sorter
-    restart: unless-stopped
+    image: gmail-classifier:v7.1
+    container_name: gmail-classifier
+    restart: always
     ports:
-      - "8013:8013"
+      - "${PORT:-8000}:8000"
     environment:
-      # Pass your API key here or use an .env file
-      - CLASSIFIER_API_KEY=${CLASSIFIER_API_KEY:-change_me_to_a_secure_key}
-
-      # Dynamic memory management: how long to stay idle before unloading the model
-      - IDLE_TIMEOUT_SECONDS=60
-
-      # Keep the web server alive with 10s health pings
-      - ENABLE_KEEP_ALIVE=true
-      # Uncomment if you want to store feedback to a JSON file instead of memory
-      # - FEEDBACK_STORE_TYPE=json_file
-      # - FEEDBACK_FILE_PATH=/app/data/feedback_data.json
-
+      - CLASSIFIER_API_KEY=${CLASSIFIER_API_KEY}
+      - MODEL_NAME=${MODEL_NAME:-BAAI/bge-m3}
+      - QDRANT_PATH=qdrant_data
+      - QDRANT_COLLECTION_NAME=${QDRANT_COLLECTION_NAME:-embeddings_v7_1}
+      - MAX_BATCH_SIZE=${MAX_BATCH_SIZE:-100}
+      - WEIGHT_SUBJECT=${WEIGHT_SUBJECT:-0.65}
+      - WEIGHT_BODY=${WEIGHT_BODY:-0.35}
+      - AUTO_SORT_CONFIDENCE=${AUTO_SORT_CONFIDENCE:-0.82}
+      - AUTO_SORT_MARGIN=${AUTO_SORT_MARGIN:-0.08}
     volumes:
-      # Cache HuggingFace models so they don't re-download on container restart
-      - model_cache:/root/.cache/huggingface
-      # Uncomment if using json_file feedback store (ensure the host ./data folder exists)
-      # - ./data:/app/data
-
+      # Persist Qdrant embeddings to avoid regenerating them
+      - ./qdrant_data:/app/qdrant_data
+      # Persist HuggingFace downloaded models (BGE-M3 is 2GB+)
+      - huggingface_cache:/root/.cache/huggingface
     networks:
       - proxy_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 networks:
   proxy_network:
     external: true
 
 volumes:
-  model_cache:
+  huggingface_cache:

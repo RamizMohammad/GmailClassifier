@@ -1,10 +1,8 @@
 """
-Gmail Smart Sorter V7 — Semantic Classifier API
+Gmail Smart Sorter V7.1 — Semantic Classifier API
 
-FastAPI application with multi-prototype hierarchical classification,
-subject-first weighted signals, and conflict detection.
-
-Endpoints: /health, /classify, /feedback, /evaluate
+FastAPI application with Qdrant embedding caching, subject-first weighted signals,
+and BAAI/bge-m3 embeddings.
 """
 
 import asyncio
@@ -47,7 +45,6 @@ feedback_store: FeedbackStore = None  # type: ignore[assignment]
 
 
 async def keep_alive_task():
-    """Background task that pings the health endpoint every 10 seconds."""
     logger.info("Starting 10-second keep-alive pinger...")
     while True:
         try:
@@ -57,50 +54,39 @@ async def keep_alive_task():
         await asyncio.sleep(10)
 
 
-# --- Lifespan ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialize resources at startup."""
     global feedback_store
+    logger.info("Starting Gmail Smart Sorter V7.1 API...")
 
-    logger.info("Starting Gmail Smart Sorter V7 API...")
-
-    # Start the memory idle watcher (model loads on first request)
     classifier.start_watcher()
-
-    # Initialize feedback store
     feedback_store = create_feedback_store()
 
-    # Start keep-alive if enabled
     keep_alive = None
     if config.ENABLE_KEEP_ALIVE:
         keep_alive = asyncio.create_task(keep_alive_task())
 
-    logger.info("V7 API ready. Model will load on first classification request.")
+    logger.info("V7.1 API ready. Model will load on first classification request.")
     yield
 
-    logger.info("Shutting down V7 API...")
+    logger.info("Shutting down V7.1 API...")
     classifier.stop_watcher()
     if keep_alive:
         keep_alive.cancel()
 
 
-# --- App ---
 app = FastAPI(
-    title="Gmail Smart Sorter V7",
-    description="Multi-prototype hierarchical email classifier using Sentence Transformer embeddings",
-    version="7.0.0",
+    title="Gmail Smart Sorter V7.1",
+    description="Multi-prototype hierarchical email classifier with persistent embedding cache",
+    version="7.1.0",
     docs_url=None,
     redoc_url=None,
     lifespan=lifespan,
 )
 
 
-# --- Authentication ---
 async def verify_api_key(x_api_key: str = Header(..., alias="X-API-Key")):
-    """Verify the API key using constant-time comparison."""
     import hmac
-
     if not config.CLASSIFIER_API_KEY:
         raise HTTPException(status_code=500, detail="Server misconfiguration: API key not set.")
     if not hmac.compare_digest(x_api_key, config.CLASSIFIER_API_KEY):
@@ -108,10 +94,8 @@ async def verify_api_key(x_api_key: str = Header(..., alias="X-API-Key")):
     return x_api_key
 
 
-# --- Middleware ---
 @app.middleware("http")
 async def limit_request_size(request: Request, call_next):
-    """Reject requests that exceed the maximum allowed size."""
     content_length = request.headers.get("content-length")
     if content_length and int(content_length) > config.MAX_REQUEST_SIZE:
         return JSONResponse(status_code=413, content={"detail": "Request body too large."})
@@ -130,7 +114,6 @@ async def validation_exception_handler(request: Request, exc):
 
 @app.get("/health", response_model=HealthResponse)
 async def health():
-    """Public health check. Does NOT trigger model load."""
     return HealthResponse(
         status="ok",
         version=config.VERSION,
@@ -138,6 +121,9 @@ async def health():
         model_loaded=classifier.is_loaded,
         prototype_count=classifier.num_prototypes,
         category_count=classifier.num_categories,
+        embedding_dimension=classifier.dimension,
+        embedding_store="qudrat",
+        embedding_cache="ready" if classifier.is_loaded else "waiting",
     )
 
 
@@ -148,7 +134,6 @@ async def health():
     dependencies=[Depends(verify_api_key)],
 )
 async def classify(request: ClassifyRequest):
-    """Batch email classification. Loads model on first request."""
     if len(request.emails) > config.MAX_BATCH_SIZE:
         raise HTTPException(
             status_code=413,
@@ -166,15 +151,8 @@ async def classify(request: ClassifyRequest):
     return ClassifyResponse(version=config.VERSION, results=results)
 
 
-@app.post(
-    "/feedback",
-    response_model=FeedbackResponse,
-    responses={401: {"model": ErrorResponse}},
-    dependencies=[Depends(verify_api_key)],
-)
+@app.post("/feedback", response_model=FeedbackResponse, dependencies=[Depends(verify_api_key)])
 async def submit_feedback(request: FeedbackRequest):
-    """Submit classification correction. Does NOT persist email content."""
-    # Validate category
     if request.correct_category not in ALL_CATEGORIES:
         raise HTTPException(
             status_code=400,
@@ -187,12 +165,6 @@ async def submit_feedback(request: FeedbackRequest):
         correct_category=request.correct_category,
     )
     feedback_store.save(entry)
-
-    logger.info(
-        "Feedback: id=%s, predicted=%s, correct=%s",
-        request.id, request.predicted_category, request.correct_category,
-    )
-
     return FeedbackResponse(
         status="ok",
         message="Feedback recorded.",
@@ -201,44 +173,58 @@ async def submit_feedback(request: FeedbackRequest):
     )
 
 
-@app.post(
-    "/evaluate",
-    response_model=EvaluateResponse,
-    responses={401: {"model": ErrorResponse}},
-    dependencies=[Depends(verify_api_key)],
-)
+@app.post("/evaluate", response_model=EvaluateResponse, dependencies=[Depends(verify_api_key)])
 async def evaluate(request: EvaluateRequest):
-    """
-    Run benchmark evaluation against labeled examples.
-    Returns accuracy, precision, recall, F1, and confusion matrix.
-    """
     logger.info("Evaluating %d benchmark examples.", len(request.examples))
 
     total = len(request.examples)
     correct = 0
     top3_correct = 0
+    auto_sort_correct = 0
+    auto_sort_total = 0
+    review_total = 0
+    unmatched_total = 0
+    
     misclassified = []
-
-    # Per-category tracking
     true_positives = defaultdict(int)
     false_positives = defaultdict(int)
     false_negatives = defaultdict(int)
     support = defaultdict(int)
     confusion = defaultdict(lambda: defaultdict(int))
 
-    for example in request.examples:
-        try:
-            result = classifier.classify_text(example.text)
-        except Exception as e:
-            logger.error("Evaluation error for '%s': %s", example.text[:50], e)
-            continue
+    # Convert BenchmarkExample to EmailInput for batching to utilize cache
+    emails_to_classify = [
+        EmailInput(
+            id=f"eval_{i}",
+            subject=ex.subject if ex.subject else ex.text, 
+            body=ex.body,
+            sender=""
+        ) for i, ex in enumerate(request.examples)
+    ]
+    
+    try:
+        results = classifier.classify_batch(emails_to_classify)
+    except Exception as e:
+        logger.error("Evaluation batch classification error: %s", e)
+        raise HTTPException(status_code=500, detail="Evaluation failed.")
 
+    for i, result in enumerate(results):
+        example = request.examples[i]
         predicted = result.category
         expected = example.expected_category
         top3_cats = [c.category for c in result.top3]
 
         confusion[expected][predicted] += 1
         support[expected] += 1
+
+        if result.decision == "AUTO_SORT":
+            auto_sort_total += 1
+            if predicted == expected:
+                auto_sort_correct += 1
+        elif result.decision == "REVIEW":
+            review_total += 1
+        else:
+            unmatched_total += 1
 
         if predicted == expected:
             correct += 1
@@ -247,9 +233,10 @@ async def evaluate(request: EvaluateRequest):
             false_positives[predicted] += 1
             false_negatives[expected] += 1
             misclassified.append({
-                "text": example.text[:100],
+                "text": (example.subject or example.text)[:100],
                 "expected": expected,
                 "predicted": predicted,
+                "decision": result.decision,
                 "confidence": result.confidence,
                 "top3": [{"category": c.category, "score": c.score} for c in result.top3],
             })
@@ -257,7 +244,6 @@ async def evaluate(request: EvaluateRequest):
         if expected in top3_cats:
             top3_correct += 1
 
-    # Compute per-category metrics
     all_cats = set(list(support.keys()) + list(true_positives.keys()) +
                    list(false_positives.keys()) + list(false_negatives.keys()))
     per_category = []
@@ -276,7 +262,6 @@ async def evaluate(request: EvaluateRequest):
             support=support.get(cat, 0),
         ))
 
-    # Macro averages
     n_cats = len(per_category) if per_category else 1
     macro_precision = sum(m.precision for m in per_category) / n_cats
     macro_recall = sum(m.recall for m in per_category) / n_cats
@@ -284,8 +269,11 @@ async def evaluate(request: EvaluateRequest):
 
     accuracy = correct / total if total > 0 else 0.0
     top3_accuracy = top3_correct / total if total > 0 else 0.0
+    auto_sort_precision = auto_sort_correct / auto_sort_total if auto_sort_total > 0 else 0.0
+    auto_sort_coverage = auto_sort_total / total if total > 0 else 0.0
+    review_rate = review_total / total if total > 0 else 0.0
+    unmatched_rate = unmatched_total / total if total > 0 else 0.0
 
-    # Convert confusion defaultdict to regular dict
     confusion_dict = {k: dict(v) for k, v in confusion.items()}
 
     return EvaluateResponse(
@@ -297,12 +285,38 @@ async def evaluate(request: EvaluateRequest):
         macro_precision=round(macro_precision, 4),
         macro_recall=round(macro_recall, 4),
         macro_f1=round(macro_f1, 4),
+        auto_sort_precision=round(auto_sort_precision, 4),
+        auto_sort_coverage=round(auto_sort_coverage, 4),
+        review_rate=round(review_rate, 4),
+        unmatched_rate=round(unmatched_rate, 4),
         per_category=per_category,
         confusion=confusion_dict,
         misclassified=misclassified,
     )
 
 
+# --- Admin Endpoints ---
+
+@app.get("/embedding-cache/stats", dependencies=[Depends(verify_api_key)])
+async def cache_stats():
+    """Return Qdrant cache statistics."""
+    if not classifier.is_loaded:
+        classifier.load()
+    return classifier.store.stats()
+
+
+@app.post("/embedding-cache/rebuild", dependencies=[Depends(verify_api_key)])
+async def cache_rebuild():
+    """Drop the Qdrant collection and re-initialize it."""
+    classifier.store.rebuild()
+    
+    # Force classifier to reload and re-encode prototypes
+    classifier._is_loaded = False
+    classifier.load()
+    
+    return {"status": "ok", "message": "Embedding cache rebuilt successfully."}
+
+
 @app.get("/", include_in_schema=False)
 async def root():
-    return {"message": "Gmail Smart Sorter V7 API", "health": "/health", "version": config.VERSION}
+    return {"message": "Gmail Smart Sorter V7.1 API", "health": "/health", "version": config.VERSION}
