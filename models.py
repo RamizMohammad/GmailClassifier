@@ -1,9 +1,11 @@
 """
-Pydantic models for request/response validation.
+Pydantic models for Gmail Smart Sorter V7 request/response validation.
 """
 
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
+
+import config
 
 
 # --- Request Models ---
@@ -26,11 +28,25 @@ class ClassifyRequest(BaseModel):
 
 
 class FeedbackRequest(BaseModel):
-    """Correction feedback for a classification."""
-    email_id: str = Field(..., description="ID of the email that was misclassified")
-    text: str = Field(..., description="The email text that was classified")
+    """Correction feedback for a classification. Does NOT accept email body (privacy)."""
+    id: str = Field(..., description="ID of the email that was misclassified")
     predicted_category: str = Field(..., description="The category the API predicted")
     correct_category: str = Field(..., description="The correct category")
+
+
+class EvaluateExample(BaseModel):
+    """A single labeled example for evaluation."""
+    text: str = Field(..., description="The email subject/text to classify")
+    expected_category: str = Field(..., description="The correct category label")
+
+
+class EvaluateRequest(BaseModel):
+    """Batch evaluation request with labeled examples."""
+    examples: List[EvaluateExample] = Field(
+        ...,
+        min_length=1,
+        description="List of labeled examples to evaluate"
+    )
 
 
 # --- Response Models ---
@@ -42,35 +58,66 @@ class CategoryScore(BaseModel):
 
 
 class ClassificationResult(BaseModel):
-    """Classification result for a single email."""
+    """V7 classification result for a single email."""
     id: str
     category: str
-    similarity: float
+    decision: str  # "AUTO_SORT", "REVIEW", "UNMATCHED"
     confidence: float
-    confidence_level: str  # "high", "medium", "low"
+    similarity: float
     margin: float
-    top_categories: List[CategoryScore]
+    family: str
+    family_confidence: float
+    family_margin: float
+    top3: List[CategoryScore]
+    reason: str
 
 
 class ClassifyResponse(BaseModel):
-    """Batch classification response."""
+    """V7 batch classification response."""
+    version: str = config.VERSION
     results: List[ClassificationResult]
 
 
 class HealthResponse(BaseModel):
-    """Health check response."""
+    """V7 health check response."""
     status: str
+    version: str = config.VERSION
     model: str
     model_loaded: bool
-    categories_loaded: int
+    prototype_count: int
+    category_count: int
 
 
 class FeedbackResponse(BaseModel):
     """Feedback submission response."""
     status: str
     message: str
-    email_id: str
+    id: str
     correct_category: str
+
+
+class PerCategoryMetric(BaseModel):
+    """Metrics for a single category."""
+    category: str
+    precision: float
+    recall: float
+    f1: float
+    support: int
+
+
+class EvaluateResponse(BaseModel):
+    """V7 evaluation response with full metrics."""
+    version: str = config.VERSION
+    total: int
+    correct: int
+    accuracy: float
+    top3_accuracy: float
+    macro_precision: float
+    macro_recall: float
+    macro_f1: float
+    per_category: List[PerCategoryMetric]
+    confusion: Dict[str, Dict[str, int]]
+    misclassified: List[Dict[str, Any]]
 
 
 class ErrorResponse(BaseModel):

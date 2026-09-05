@@ -1,5 +1,5 @@
 """
-Configuration module for Gmail Smart Sorter V6.
+Configuration module for Gmail Smart Sorter V7.
 
 All settings are loaded from environment variables with sensible defaults.
 """
@@ -7,6 +7,9 @@ All settings are loaded from environment variables with sensible defaults.
 import os
 from typing import Optional
 
+
+# --- Version ---
+VERSION: str = "v7"
 
 # --- Authentication ---
 CLASSIFIER_API_KEY: Optional[str] = os.environ.get("CLASSIFIER_API_KEY")
@@ -16,31 +19,38 @@ MODEL_NAME: str = os.environ.get("MODEL_NAME", "sentence-transformers/all-MiniLM
 
 # --- Limits ---
 MAX_BATCH_SIZE: int = int(os.environ.get("MAX_BATCH_SIZE", "100"))
-MAX_BODY_LENGTH: int = int(os.environ.get("MAX_BODY_LENGTH", "5000"))
+MAX_BODY_LENGTH: int = int(os.environ.get("MAX_BODY_LENGTH", "2000"))
 MAX_REQUEST_SIZE: int = int(os.environ.get("MAX_REQUEST_SIZE", str(10 * 1024 * 1024)))  # 10 MB
 
-# --- Classification Thresholds ---
-CONFIDENCE_HIGH_SIMILARITY: float = float(os.environ.get("CONFIDENCE_HIGH_SIMILARITY", "0.78"))
-CONFIDENCE_HIGH_MARGIN: float = float(os.environ.get("CONFIDENCE_HIGH_MARGIN", "0.08"))
-CONFIDENCE_MEDIUM_SIMILARITY: float = float(os.environ.get("CONFIDENCE_MEDIUM_SIMILARITY", "0.65"))
-CONFIDENCE_MEDIUM_MARGIN: float = float(os.environ.get("CONFIDENCE_MEDIUM_MARGIN", "0.04"))
+# --- Data Files ---
+PROTOTYPES_FILE: str = os.environ.get("PROTOTYPES_FILE", "data/prototypes.json")
+BENCHMARK_FILE: str = os.environ.get("BENCHMARK_FILE", "data/benchmark.json")
+
+# --- Signal Weights (subject-first) ---
+WEIGHT_SUBJECT: float = float(os.environ.get("WEIGHT_SUBJECT", "0.50"))
+WEIGHT_FULLTEXT: float = float(os.environ.get("WEIGHT_FULLTEXT", "0.40"))
+WEIGHT_SENDER: float = float(os.environ.get("WEIGHT_SENDER", "0.10"))
+
+# --- Prototype Scoring ---
+PROTO_TOP1_WEIGHT: float = float(os.environ.get("PROTO_TOP1_WEIGHT", "0.70"))
+PROTO_TOPK_WEIGHT: float = float(os.environ.get("PROTO_TOPK_WEIGHT", "0.30"))
+PROTO_TOP_K: int = int(os.environ.get("PROTO_TOP_K", "3"))
+
+# --- Decision Thresholds ---
+AUTO_SORT_CONFIDENCE: float = float(os.environ.get("AUTO_SORT_CONFIDENCE", "0.82"))
+AUTO_SORT_MARGIN: float = float(os.environ.get("AUTO_SORT_MARGIN", "0.08"))
+REVIEW_CONFIDENCE: float = float(os.environ.get("REVIEW_CONFIDENCE", "0.60"))
 
 # --- Feedback ---
 FEEDBACK_STORE_TYPE: str = os.environ.get("FEEDBACK_STORE_TYPE", "memory")
 FEEDBACK_FILE_PATH: str = os.environ.get("FEEDBACK_FILE_PATH", "feedback_data.json")
 
-# --- Categories ---
-CATEGORIES_FILE: str = os.environ.get("CATEGORIES_FILE", "categories.json")
-
 # --- Server ---
 PORT: int = int(os.environ.get("PORT", "8000"))
 
-# --- Top-K categories to return ---
+# --- Top-K categories to return in response ---
 TOP_K: int = int(os.environ.get("TOP_K", "3"))
 
 # --- Dynamic Memory Management ---
-# How long (in seconds) the service must be idle before unloading the model
 IDLE_TIMEOUT_SECONDS: int = int(os.environ.get("IDLE_TIMEOUT_SECONDS", "60"))
-
-# Whether to enable the 10-second self-ping keep-alive
 ENABLE_KEEP_ALIVE: bool = os.environ.get("ENABLE_KEEP_ALIVE", "true").lower() == "true"

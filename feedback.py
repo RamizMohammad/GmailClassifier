@@ -1,11 +1,8 @@
 """
-Pluggable feedback storage for classification corrections.
+Pluggable feedback storage for classification corrections — V7.
 
-Provides an abstract interface and two initial implementations:
-- MemoryFeedbackStore: In-memory (ephemeral, for development/initial deploy)
-- JsonFileFeedbackStore: JSON file (ephemeral on Render Free)
-
-Future implementations can add Supabase, PostgreSQL, Google Sheets, etc.
+PRIVACY: Does NOT store email content (subject, body, or sender).
+Only stores: email_id, predicted_category, correct_category, timestamp.
 """
 
 import json
@@ -22,17 +19,15 @@ logger = logging.getLogger(__name__)
 
 
 class FeedbackEntry:
-    """A single feedback entry."""
+    """A single feedback entry. No email content stored."""
 
     def __init__(
         self,
         email_id: str,
-        text: str,
         predicted_category: str,
         correct_category: str,
     ) -> None:
         self.email_id = email_id
-        self.text = text
         self.predicted_category = predicted_category
         self.correct_category = correct_category
         self.timestamp = datetime.now(timezone.utc).isoformat()
@@ -40,7 +35,6 @@ class FeedbackEntry:
     def to_dict(self) -> Dict[str, Any]:
         return {
             "email_id": self.email_id,
-            "text": self.text,
             "predicted_category": self.predicted_category,
             "correct_category": self.correct_category,
             "timestamp": self.timestamp,
@@ -52,27 +46,19 @@ class FeedbackStore(ABC):
 
     @abstractmethod
     def save(self, entry: FeedbackEntry) -> None:
-        """Save a feedback entry."""
         ...
 
     @abstractmethod
-    def get_examples(self, category: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Retrieve feedback entries, optionally filtered by correct_category."""
+    def get_entries(self, category: Optional[str] = None) -> List[Dict[str, Any]]:
         ...
 
     @abstractmethod
     def count(self) -> int:
-        """Return the total number of stored feedback entries."""
         ...
 
 
 class MemoryFeedbackStore(FeedbackStore):
-    """
-    In-memory feedback store.
-
-    WARNING: All data is lost when the service restarts.
-    Suitable for development and initial deployment.
-    """
+    """In-memory feedback store. All data lost on restart."""
 
     def __init__(self) -> None:
         self._entries: List[FeedbackEntry] = []
@@ -82,17 +68,15 @@ class MemoryFeedbackStore(FeedbackStore):
         with self._lock:
             self._entries.append(entry)
         logger.info(
-            "Feedback saved (memory): email_id=%s, correct=%s",
-            entry.email_id,
-            entry.correct_category,
+            "Feedback saved (memory): id=%s, predicted=%s, correct=%s",
+            entry.email_id, entry.predicted_category, entry.correct_category,
         )
 
-    def get_examples(self, category: Optional[str] = None) -> List[Dict[str, Any]]:
+    def get_entries(self, category: Optional[str] = None) -> List[Dict[str, Any]]:
         with self._lock:
             if category:
                 return [
-                    e.to_dict()
-                    for e in self._entries
+                    e.to_dict() for e in self._entries
                     if e.correct_category == category
                 ]
             return [e.to_dict() for e in self._entries]
@@ -103,13 +87,7 @@ class MemoryFeedbackStore(FeedbackStore):
 
 
 class JsonFileFeedbackStore(FeedbackStore):
-    """
-    JSON file feedback store.
-
-    WARNING: Render Free has an ephemeral filesystem. Data saved here
-    will be lost on every deploy and may be lost on service restart.
-    Use only as a stepping stone before migrating to a persistent store.
-    """
+    """JSON file feedback store. Ephemeral on Render Free."""
 
     def __init__(self, file_path: Optional[str] = None) -> None:
         self._file_path = Path(file_path or config.FEEDBACK_FILE_PATH)
@@ -137,12 +115,11 @@ class JsonFileFeedbackStore(FeedbackStore):
             data.append(entry.to_dict())
             self._write(data)
         logger.info(
-            "Feedback saved (file): email_id=%s, correct=%s",
-            entry.email_id,
-            entry.correct_category,
+            "Feedback saved (file): id=%s, correct=%s",
+            entry.email_id, entry.correct_category,
         )
 
-    def get_examples(self, category: Optional[str] = None) -> List[Dict[str, Any]]:
+    def get_entries(self, category: Optional[str] = None) -> List[Dict[str, Any]]:
         with self._lock:
             data = self._read()
             if category:
@@ -155,24 +132,15 @@ class JsonFileFeedbackStore(FeedbackStore):
 
 
 def create_feedback_store() -> FeedbackStore:
-    """
-    Factory function that creates the appropriate FeedbackStore
-    based on the FEEDBACK_STORE_TYPE configuration.
-    """
+    """Factory function for the configured FeedbackStore."""
     store_type = config.FEEDBACK_STORE_TYPE.lower()
 
     if store_type == "memory":
         logger.info("Using in-memory feedback store (ephemeral).")
         return MemoryFeedbackStore()
     elif store_type == "json_file":
-        logger.info(
-            "Using JSON file feedback store at: %s (WARNING: ephemeral on Render).",
-            config.FEEDBACK_FILE_PATH,
-        )
+        logger.info("Using JSON file feedback store at: %s", config.FEEDBACK_FILE_PATH)
         return JsonFileFeedbackStore()
     else:
-        logger.warning(
-            "Unknown FEEDBACK_STORE_TYPE '%s', falling back to memory store.",
-            store_type,
-        )
+        logger.warning("Unknown FEEDBACK_STORE_TYPE '%s', falling back to memory.", store_type)
         return MemoryFeedbackStore()
