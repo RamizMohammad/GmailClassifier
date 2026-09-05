@@ -3,11 +3,11 @@ Gmail Smart Sorter V6 — Semantic Classifier API
 
 FastAPI application that classifies emails using Sentence Transformer
 embeddings and cosine similarity against pre-defined category prototypes.
-
-Designed for Render Free (≤512 MB RAM, CPU-only).
 """
 
+import asyncio
 import logging
+import urllib.request
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
@@ -36,27 +36,45 @@ logger = logging.getLogger(__name__)
 feedback_store: FeedbackStore = None  # type: ignore[assignment]
 
 
+async def keep_alive_task():
+    """Background task that pings the health endpoint every 10 seconds."""
+    logger.info("Starting 10-second keep-alive pinger...")
+    while True:
+        try:
+            # Simple HTTP GET to self
+            urllib.request.urlopen(f"http://127.0.0.1:{config.PORT}/health", timeout=5)
+        except Exception as e:
+            logger.debug(f"Keep-alive ping failed: {e}")
+        await asyncio.sleep(10)
+
+
 # --- Lifespan ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialize model and category embeddings at startup."""
+    """Initialize resources at startup."""
     global feedback_store
 
     logger.info("Starting Gmail Smart Sorter V6 API...")
 
-    # Load classifier (model + category embeddings)
-    try:
-        classifier.load()
-    except Exception as e:
-        logger.error("Failed to load classifier: %s", e)
-        raise
+    # We do NOT load the model immediately. It will load on the first /classify request.
+    # Start the memory idle watcher
+    classifier.start_watcher()
 
     # Initialize feedback store
     feedback_store = create_feedback_store()
 
-    logger.info("API ready.")
+    # Start the keep-alive task if enabled
+    keep_alive = None
+    if config.ENABLE_KEEP_ALIVE:
+        keep_alive = asyncio.create_task(keep_alive_task())
+
+    logger.info("API ready. Waiting for first classification request to load model.")
     yield
-    logger.info("Shutting down API.")
+
+    logger.info("Shutting down API...")
+    classifier.stop_watcher()
+    if keep_alive:
+        keep_alive.cancel()
 
 
 # --- App ---
@@ -111,10 +129,10 @@ async def validation_exception_handler(request: Request, exc):
 async def health():
     """
     Health check endpoint. Does not require authentication.
-    Returns model status and number of loaded categories.
+    Does NOT trigger a model load.
     """
     return HealthResponse(
-        status="ok" if classifier.is_loaded else "loading",
+        status="ok",
         model=config.MODEL_NAME,
         model_loaded=classifier.is_loaded,
         categories_loaded=classifier.num_categories,
@@ -132,13 +150,8 @@ async def classify(request: ClassifyRequest):
     """
     Batch email classification endpoint.
 
-    Accepts up to MAX_BATCH_SIZE emails, encodes them in a single batch,
-    and returns classification results with similarity scores, confidence
-    levels, and top competing categories.
+    Loads the AI model into RAM if it's currently unloaded.
     """
-    if not classifier.is_loaded:
-        raise HTTPException(status_code=503, detail="Classifier not ready.")
-
     if len(request.emails) > config.MAX_BATCH_SIZE:
         raise HTTPException(
             status_code=413,
@@ -166,12 +179,14 @@ async def classify(request: ClassifyRequest):
 async def submit_feedback(request: FeedbackRequest):
     """
     Submit classification correction feedback.
-
-    Stores the feedback and optionally updates the category centroid
-    so future classifications improve.
     """
+    # Force a load if not loaded to ensure categories are populated
     if not classifier.is_loaded:
-        raise HTTPException(status_code=503, detail="Classifier not ready.")
+        try:
+            classifier.load()
+        except Exception as e:
+            logger.error("Failed to load classifier for feedback: %s", e)
+            raise HTTPException(status_code=500, detail="Failed to initialize classifier.")
 
     # Validate that the correct category exists
     if request.correct_category not in classifier.category_names:

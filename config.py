@@ -37,3 +37,10 @@ PORT: int = int(os.environ.get("PORT", "8000"))
 
 # --- Top-K categories to return ---
 TOP_K: int = int(os.environ.get("TOP_K", "3"))
+
+# --- Dynamic Memory Management ---
+# How long (in seconds) the service must be idle before unloading the model
+IDLE_TIMEOUT_SECONDS: int = int(os.environ.get("IDLE_TIMEOUT_SECONDS", "60"))
+
+# Whether to enable the 10-second self-ping keep-alive
+ENABLE_KEEP_ALIVE: bool = os.environ.get("ENABLE_KEEP_ALIVE", "true").lower() == "true"

@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  gmail-sorter:
+    build: .
+    container_name: gmail-sorter
+    restart: unless-stopped
+    ports:
+      - "8013:8000"
+    environment:
+      # Pass your API key here or use an .env file
+      - CLASSIFIER_API_KEY=${CLASSIFIER_API_KEY:-change_me_to_a_secure_key}
+      
+      # Dynamic memory management: how long to stay idle before unloading the model
+      - IDLE_TIMEOUT_SECONDS=60
+      
+      # Keep the web server alive with 10s health pings
+      - ENABLE_KEEP_ALIVE=true
+      
+      # Uncomment if you want to store feedback to a JSON file instead of memory
+      # - FEEDBACK_STORE_TYPE=json_file
+      # - FEEDBACK_FILE_PATH=/app/data/feedback_data.json
+    
+    volumes:
+      # Cache HuggingFace models so they don't re-download on container restart
+      - model_cache:/root/.cache/huggingface
+      
+      # Uncomment if using json_file feedback store (ensure the host ./data folder exists)
+      # - ./data:/app/data
+      
+    networks:
+      - proxy_network
+
+networks:
+  proxy_network:
+    external: true
+
+volumes:
+  model_cache:

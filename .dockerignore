@@ -1,0 +1,30 @@
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Model cache (prevent copying huge weights into the build context)
+model_cache/
+~/.cache/huggingface/
+
+# Environment and secrets
+.env
+.env.*
+
+# Git
+.git/
+.gitignore
+
+# Testing
+tests/
+.pytest_cache/
+htmlcov/
+.coverage
+
+# Feedback data
+feedback_data.json
