@@ -1,0 +1,153 @@
+name: Deploy Gemini Classifier to VPS
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 2  # need previous commit for diff/compare info
+
+      - name: Gather commit info
+        id: commit
+        run: |
+          echo "author_name=$(git log -1 --pretty=format:'%an')" >> "$GITHUB_OUTPUT"
+          echo "short_sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+          # HEAD~1 doesn't exist on the very first commit of a repo — guard it
+          if git rev-parse HEAD~1 >/dev/null 2>&1; then
+            FILES_CHANGED=$(git diff --name-only HEAD~1 HEAD | wc -l | tr -d ' ')
+          else
+            FILES_CHANGED="N/A (initial commit)"
+          fi
+          echo "files_changed=${FILES_CHANGED}" >> "$GITHUB_OUTPUT"
+          echo "start_time=$(date +%s)" >> "$GITHUB_OUTPUT"
+
+      - name: Setup SSH Agent
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: ${{ secrets.VPS }}
+
+      - name: Add VPS to known hosts
+        run: |
+          ssh-keyscan -H ${{ secrets.VPS_IP }} >> ~/.ssh/known_hosts
+
+      - name: Deploy with Docker
+        id: deploy
+        run: |
+          set -o pipefail
+          ssh root@${{ secrets.VPS_IP }} bash << 'EOF' | tee /tmp/deploy_output.log
+            set -e
+            echo "Starting deployment..."
+            cd /root/Projects/GmailClassifier
+            echo "===> Pulling latest code"
+            git fetch origin main
+            git reset --hard origin/main
+            echo "===> Stopping old containers"
+            docker compose down
+            echo "===> Building new image (full logs)"
+            docker compose build --no-cache --progress=plain
+            echo "===> Starting containers"
+            docker compose up -d
+            echo "===> Cleaning unused images"
+            docker image prune -f
+            echo "===> Waiting 15s for containers to stabilize..."
+            sleep 15
+            echo "===> Container status"
+            docker compose ps
+            echo "===> Health check"
+            STATUS=$(docker inspect --format='{{.State.Health.Status}}' confess-api 2>/dev/null || echo "no-healthcheck")
+            echo "HEALTH_STATUS=${STATUS}"
+            if [ "$STATUS" = "unhealthy" ]; then
+              echo "===> Container is UNHEALTHY! Last logs:"
+              docker compose logs --tail=50 confess-api
+              exit 1
+            fi
+            echo "===> Deployment completed successfully"
+          EOF
+
+          HEALTH_STATUS=$(grep '^HEALTH_STATUS=' /tmp/deploy_output.log | tail -1 | cut -d'=' -f2)
+          echo "health_status=${HEALTH_STATUS:-unknown}" >> "$GITHUB_OUTPUT"
+
+      - name: Compute duration
+        if: always()
+        id: duration
+        env:
+          START_TIME: ${{ steps.commit.outputs.start_time }}
+        run: |
+          END=$(date +%s)
+          if [ -n "$START_TIME" ]; then
+            echo "elapsed=$(( END - START_TIME ))s" >> "$GITHUB_OUTPUT"
+          else
+            echo "elapsed=unknown" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Notify Telegram on Success
+        if: success()
+        env:
+          BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          COMMIT_MSG_RAW: ${{ github.event.head_commit.message }}
+          AUTHOR_NAME: ${{ steps.commit.outputs.author_name }}
+          SHORT_SHA: ${{ steps.commit.outputs.short_sha }}
+          FILES_CHANGED: ${{ steps.commit.outputs.files_changed }}
+          DURATION: ${{ steps.duration.outputs.elapsed }}
+          HEALTH: ${{ steps.deploy.outputs.health_status }}
+          ACTOR: ${{ github.actor }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          # Escape HTML special chars so Telegram's parse_mode=HTML doesn't reject the message,
+          # and truncate long commit messages. All dynamic values come from env vars (not inline
+          # GitHub expression interpolation) so untrusted commit text can never break the shell command.
+          html_escape() {
+            sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'
+          }
+
+          COMMIT_MSG=$(echo "$COMMIT_MSG_RAW" | head -c 200 | html_escape)
+          AUTHOR_NAME_ESC=$(echo "$AUTHOR_NAME" | html_escape)
+          TIME_NOW=$(date -u '+%Y-%m-%d %H:%M UTC')
+
+          TEXT=$(printf '✅ <b>Deployment Successful</b>\n━━━━━━━━━━━━━━━━━━━━━\n📁 <b>Project:</b> Family Vault Server\n🌿 <b>Branch:</b> <code>vps</code>\n📝 <b>Commit:</b> <code>%s</code>\n💬 <b>Message:</b> %s\n👤 <b>Author:</b> %s\n🚀 <b>Triggered by:</b> %s\n📂 <b>Files changed:</b> %s\n⏱ <b>Duration:</b> %s\n🩺 <b>Health:</b> %s\n🕐 <b>Time:</b> %s\n━━━━━━━━━━━━━━━━━━━━━\n🚀 <i>Live on VPS</i>\n\n🔗 <a href="https://github.com/%s/commit/%s">View commit</a>\n👤 <a href="https://github.com/%s">%s on GitHub</a>' \
+            "$SHORT_SHA" "$COMMIT_MSG" "$AUTHOR_NAME_ESC" "$ACTOR" "$FILES_CHANGED" "$DURATION" "$HEALTH" "$TIME_NOW" "$REPO" "$SHA" "$ACTOR" "$ACTOR")
+
+          curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+            --data-urlencode chat_id="${CHAT_ID}" \
+            --data-urlencode parse_mode="HTML" \
+            --data-urlencode text="${TEXT}"
+
+      - name: Notify Telegram on Failure
+        if: failure()
+        env:
+          BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          COMMIT_MSG_RAW: ${{ github.event.head_commit.message }}
+          AUTHOR_NAME: ${{ steps.commit.outputs.author_name }}
+          SHORT_SHA: ${{ steps.commit.outputs.short_sha }}
+          DURATION: ${{ steps.duration.outputs.elapsed }}
+          HEALTH: ${{ steps.deploy.outputs.health_status }}
+          ACTOR: ${{ github.actor }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          html_escape() {
+            sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'
+          }
+
+          COMMIT_MSG=$(echo "$COMMIT_MSG_RAW" | head -c 200 | html_escape)
+          AUTHOR_NAME_ESC=$(echo "$AUTHOR_NAME" | html_escape)
+          TIME_NOW=$(date -u '+%Y-%m-%d %H:%M UTC')
+          HEALTH_DISPLAY="${HEALTH:-unknown}"
+
+          TEXT=$(printf '❌ <b>Deployment Failed</b>\n━━━━━━━━━━━━━━━━━━━━━\n📁 <b>Project:</b> Family Vault Server\n🌿 <b>Branch:</b> <code>vps</code>\n📝 <b>Commit:</b> <code>%s</code>\n💬 <b>Message:</b> %s\n👤 <b>Author:</b> %s\n🚀 <b>Triggered by:</b> %s\n⏱ <b>Duration:</b> %s\n🩺 <b>Health:</b> %s\n🕐 <b>Time:</b> %s\n━━━━━━━━━━━━━━━━━━━━━\n🔥 <i>Deployment did not complete</i>\n\n📋 <a href="https://github.com/%s/actions/runs/%s">View run logs</a>\n👤 <a href="https://github.com/%s">%s on GitHub</a>' \
+            "$SHORT_SHA" "$COMMIT_MSG" "$AUTHOR_NAME_ESC" "$ACTOR" "$DURATION" "$HEALTH_DISPLAY" "$TIME_NOW" "$REPO" "$RUN_ID" "$ACTOR" "$ACTOR")
+
+          curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+            --data-urlencode chat_id="${CHAT_ID}" \
+            --data-urlencode parse_mode="HTML" \
+            --data-urlencode text="${TEXT}"
